@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: webapp
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -23,41 +25,42 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Capacitor CLI
-        run: npm install -g @capacitor/core @capacitor/cli @capacitor/android
-
-      - name: Initialize Capacitor Project
+      - name: Setup Capacitor
         run: |
-          mkdir -p android-app
-          cd android-app
+          mkdir -p capacitor-app
+          cd capacitor-app
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "MK Zen Chat" "com.mkzen.chat" --web-dir ../ --yes
+          npx cap init --web-dir ../webapp "MK Zen Chat" "com.mkzen.chat"
+
+      - name: Add Android Platform
+        run: |
+          cd capacitor-app
           npx cap add android
 
-      - name: Copy Web Assets to Android
+      - name: Sync Web Assets
         run: |
-          cd android-app
+          cd capacitor-app
           npx cap sync android
 
       - name: Build APK
         run: |
-          cd android-app/android
+          cd capacitor-app/android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: mk-zen-chat-apk
-          path: android-app/android/app/build/outputs/apk/debug/*.apk
+          path: capacitor-app/android/app/build/outputs/apk/debug/*.apk
 
-      - name: Rename APK
+      - name: Prepare Release APK
         run: |
           mkdir -p release
-          cp android-app/android/app/build/outputs/apk/debug/app-debug.apk release/mk-zen-chat-v1.0.0.apk 2>/dev/null || true
+          cp capacitor-app/android/app/build/outputs/apk/debug/app-debug.apk release/mk-zen-chat-v1.0.0.apk 2>/dev/null || true
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
