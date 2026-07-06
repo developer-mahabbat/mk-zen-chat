@@ -30,39 +30,64 @@ jobs:
           mkdir -p capacitor-app
           cd capacitor-app
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init --web-dir ../webapp "MK Zen Chat" "com.mkzen.chat"
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
 
-      - name: Add Android Platform
+      - name: Init Capacitor
+        run: |
+          cd capacitor-app
+          cat > capacitor.config.json << 'CFGEOF'
+          {
+            "appId": "com.mkzen.chat",
+            "appName": "MK Zen Chat",
+            "webDir": "../webapp",
+            "bundledWebRuntime": false,
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          CFGEOF
+          cat capacitor.config.json
+
+      - name: Add Android
         run: |
           cd capacitor-app
           npx cap add android
 
-      - name: Sync Web Assets
+      - name: Fix Kotlin Duplicates
         run: |
-          cd capacitor-app
-          npx cap sync android
+          cd capacitor-app/android
+          cat >> app/build.gradle << 'GRADLEEOF'
+          
+          configurations.all {
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+          }
+          GRADLEEOF
 
       - name: Build APK
         run: |
           cd capacitor-app/android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          export JAVA_HOME=$JAVA_HOME_21_X64
+          ./gradlew assembleDebug --no-daemon 2>&1 | tail -50
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: mk-zen-chat-apk
           path: capacitor-app/android/app/build/outputs/apk/debug/*.apk
 
       - name: Prepare Release APK
+        if: success()
         run: |
           mkdir -p release
           cp capacitor-app/android/app/build/outputs/apk/debug/app-debug.apk release/mk-zen-chat-v1.0.0.apk 2>/dev/null || true
+          ls -la release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         with:
           name: "MK Zen Chat v1.0.0"
           tag_name: "v1.0.0"
