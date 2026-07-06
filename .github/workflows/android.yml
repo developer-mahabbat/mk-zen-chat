@@ -1,0 +1,69 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Initialize Capacitor Project
+        run: |
+          mkdir -p android-app
+          cd android-app
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "MK Zen Chat" "com.mkzen.chat" --web-dir ../ --yes
+          npx cap add android
+
+      - name: Copy Web Assets to Android
+        run: |
+          cd android-app
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android-app/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mk-zen-chat-apk
+          path: android-app/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Rename APK
+        run: |
+          mkdir -p release
+          cp android-app/android/app/build/outputs/apk/debug/app-debug.apk release/mk-zen-chat-v1.0.0.apk 2>/dev/null || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          name: "MK Zen Chat v1.0.0"
+          tag_name: "v1.0.0"
+          files: release/*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
